@@ -17,6 +17,7 @@ pub fn parallel_file_search(dir: PathBuf, search_string: String) -> Receiver<(St
     rx
 }
 
+/// Search the given `search_string` in all the files of the given directory.
 fn search_files_in_dir(dir: PathBuf, search_string: String, tx: Sender<(String, Vec<(usize, String)>)>) {
     let entries: Vec<DirEntry> = match read_dir(dir) {
         Ok(entries) => entries.filter_map(|entry| entry.ok()).collect(),
@@ -42,12 +43,10 @@ fn search_files_in_dir(dir: PathBuf, search_string: String, tx: Sender<(String, 
         } else {
             if Cli::from_args().mode == "safe" {
                 if let Some(result) = search_in_file(&path, search_string.clone()) {
-                    //results = (String::from(path.to_str().unwrap()), result);
                     sender.send((String::from(path.to_str().unwrap()), result)).unwrap()
                 }
             } else {
                 if let Some(result) = unsafe { search_in_file_unsafe(&path, search_string.clone()) } {
-                    //results = (String::from(path.to_str().unwrap()), result);
                     sender.send((String::from(path.to_str().unwrap()), result)).unwrap()
                 }
             }

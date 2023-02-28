@@ -7,6 +7,10 @@ use libc::size_t;
 
 use crate::utils::{calculate_duration, print_error};
 
+/// Search the given ```search_string``` in the file specified by a ```path``` using Rust's [`BufReader`].
+///
+/// Returns an [`Option`] with the vector containing the line number and paragraph where the
+/// ```search_string``` was found
 pub fn search_in_file(path: &PathBuf, search_string: String) -> Option<Vec<(usize, String)>> {
     let start_date = SystemTime::now();
     let file = match File::open(path) {
@@ -44,6 +48,12 @@ pub fn search_in_file(path: &PathBuf, search_string: String) -> Option<Vec<(usiz
     Some(results)
 }
 
+/// Search the given ```search_string``` in the file specified by a ```path```
+///
+/// **⚠️Warning:** This implementation uses `unsafe` rust with [`libc::mmap`].
+///
+/// Returns an [`Option`] with the vector containing the line number and paragraph where the
+/// ```search_string``` was found
 pub unsafe fn search_in_file_unsafe(path: &PathBuf, search_string: String) -> Option<Vec<(usize, String)>> {
     let start_date = SystemTime::now();
 
@@ -67,12 +77,12 @@ pub unsafe fn search_in_file_unsafe(path: &PathBuf, search_string: String) -> Op
         }
     }
 
-    // Memory map the file for faster access
+    // Memory map the file for faster access https://man7.org/linux/man-pages/man2/mmap.2.html
     let ptr = libc::mmap(
         std::ptr::null_mut(),
         size,
-        libc::PROT_READ,
-        libc::MAP_PRIVATE,
+        libc::PROT_READ, // describes the desired memory protection of the mapping - Pages may be read
+        libc::MAP_PRIVATE, // Updates to the mapping are not visible to other processes mapping the same file
         file.as_raw_fd(),
         0,
     );

@@ -1,71 +1,56 @@
-use std::fs::{File, read_dir};
-use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
+use std::fs::{DirEntry, read_dir};
+use structopt::StructOpt;
+use rayon::prelude::*;
 
-use crate::utils::print_thread_id;
+use crate::Cli;
+use crate::utils::{print_error, print_thread_id};
+use crate::search_in_file::*;
 
-pub fn parallel_file_search(dir: PathBuf, search_string: String) -> Receiver<Option<PathBuf>> {
+pub fn parallel_file_search(dir: PathBuf, search_string: String) -> Receiver<(String, Vec<(usize, String)>)> {
+    println!("Running in {} mode...", Cli::from_args().mode);
     let (tx, rx) = channel();
-
-    thread::spawn(move || {
-        print_thread_id(&thread::current());
-        search_files_in_dir(dir, search_string, tx);
-    });
+    search_files_in_dir(dir, search_string, tx);
 
     rx
 }
 
-fn search_files_in_dir(dir: PathBuf, search_string: String, tx: Sender<Option<PathBuf>>) {
-    let mut results = Vec::new();
-
-    match read_dir(dir) {
-        Ok(entries) => {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-
-                    if path.is_dir() {
-                        let dir = path.clone();
-                        let search_str = search_string.clone();
-                        let tx = tx.clone();
-                        thread::spawn(move || {
-                            print_thread_id(&thread::current());
-                            search_files_in_dir(dir, search_str, tx)
-                        });
-                    } else {
-                        results.push(search_file(path, search_string.clone()))
-                    }
-                }
-            }
-        }
-        Err(e) => println!("Couldn't read dir: {}", e)
-    }
-
-    for result in results {
-        tx.send(result).unwrap();
-    }
-}
-
-fn search_file(path: PathBuf, search_string: String) -> Option<PathBuf> {
-    let file = match File::open(&path) {
-        Ok(file) => file,
+fn search_files_in_dir(dir: PathBuf, search_string: String, tx: Sender<(String, Vec<(usize, String)>)>) {
+    let entries: Vec<DirEntry> = match read_dir(dir) {
+        Ok(entries) => entries.filter_map(|entry| entry.ok()).collect(),
         Err(e) => {
-            println!("Couldn't open file: {}", e);
-            None
+            print_error("Couldn't read dir or file", &e);
+            Vec::default()
         }
     };
 
-    let reader = BufReader::new(file);
+    entries.par_iter().for_each_with(tx, |sender, entry| {
+        let path = entry.path();
 
-    for line in reader.lines() {
-        if let Ok(line) = line {
-            if line.to_lowercase().contains(&search_string) {
-                return Some(path);
+        if Cli::from_args().show_thread_id {
+            print_thread_id(&thread::current());
+        }
+
+        if path.is_dir() {
+            let dir = path.clone();
+            let search_str = search_string.clone();
+            let tx = sender.clone();
+
+            search_files_in_dir(dir, search_str, tx);
+        } else {
+            if Cli::from_args().mode == "safe" {
+                if let Some(result) = search_in_file(&path, search_string.clone()) {
+                    //results = (String::from(path.to_str().unwrap()), result);
+                    sender.send((String::from(path.to_str().unwrap()), result)).unwrap()
+                }
+            } else {
+                if let Some(result) = unsafe { search_in_file_unsafe(&path, search_string.clone()) } {
+                    //results = (String::from(path.to_str().unwrap()), result);
+                    sender.send((String::from(path.to_str().unwrap()), result)).unwrap()
+                }
             }
         }
-    }
-
-    None
+    });
 }

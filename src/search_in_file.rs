@@ -88,7 +88,7 @@ pub unsafe fn search_in_file_unsafe(path: &PathBuf, search_string: String) -> Op
     );
 
     if ptr == libc::MAP_FAILED {
-        println!("Failed to map the file into memory");
+        eprintln!("Failed to map the file into memory");
         return None;
     }
 

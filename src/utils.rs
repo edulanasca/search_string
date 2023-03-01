@@ -14,7 +14,7 @@ pub fn print_thread_id(thread: &Thread) {
 pub fn print_error(message: &str, e: &dyn Error) {
     let args = Cli::from_args();
     if args.error {
-        println!("{}: {}", message, e);
+        eprintln!("{}: {}", message, e);
     }
 }
 
